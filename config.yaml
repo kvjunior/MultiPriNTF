@@ -1,0 +1,282 @@
+# MultiPriNTF Configuration File
+# ========================
+# Configuration for Hybrid Variational Autoencoder-Transformer architecture
+# optimized for NFT market analysis on multi-GPU systems.
+#
+# System Requirements:
+# - 3x NVIDIA RTX 3090 GPUs
+# - CUDA 11.7+
+# - 128GB System Memory
+
+# System Configuration
+# ------------------
+# Core system settings for distributed training and hardware optimization
+system:
+  num_gpus: 3
+  seed: 42  # Random seed for reproducibility
+  precision: 'mixed'  # Options: 'mixed', 'fp32', 'fp16'
+  device: 'cuda'      # Primary computation device
+  distributed:
+    enabled: true     # Enable distributed training
+    backend: 'nccl'   # Communication backend (optimized for NVIDIA GPUs)
+    init_method: 'tcp://localhost:23456'
+    world_size: 3     # Total number of processes
+    rank: 0          # Process rank
+  
+  # CUDA optimization settings
+  cuda:
+    benchmark: true   # Enable CUDA benchmarking for optimal performance
+    deterministic: false  # Disable for better performance
+    allow_tf32: true     # Enable TensorFloat-32 for A100/RTX30xx GPUs
+    memory_fraction: 0.95 # Maximum GPU memory fraction to use
+
+# Data Configuration
+# ----------------
+# Settings for data processing and loading
+data:
+  image:
+    dir: 'data/raw/images'
+    size: [224, 224]   # Input image dimensions
+    channels: 3        # Number of color channels
+    format: 'RGB'      # Color format
+    normalize:
+      mean: [0.485, 0.456, 0.406]  # ImageNet normalization
+      std: [0.229, 0.224, 0.225]
+    augmentation:
+      enabled: true
+      techniques:
+        random_crop:
+          size: [224, 224]
+          padding: 4
+        random_flip:
+          probability: 0.5
+        color_jitter:
+          brightness: 0.2
+          contrast: 0.2
+          saturation: 0.2
+          hue: 0.1
+        random_rotation:
+          degrees: 10
+
+  transaction:
+    file: 'data/raw/transactions.jsonl'
+    cache_dir: 'data/processed/transactions'
+    features:
+      temporal: true    # Enable temporal feature extraction
+      price:
+        normalization: 'standard'  # Price normalization method
+        scale: true               # Apply price scaling
+      categorical:
+        encoding: 'multi-hot'     # Categorical feature encoding
+        max_categories: 100       # Maximum number of categories
+
+  dataloader:
+    batch_size: 128    # Per GPU batch size
+    num_workers: 8     # Number of data loading workers
+    pin_memory: true   # Pin memory for faster GPU transfer
+    prefetch_factor: 2 # Number of batches to prefetch
+    persistent_workers: true  # Keep worker processes alive
+    shuffle: true      # Shuffle training data
+    drop_last: false   # Include incomplete batches
+
+# Model Architecture
+# ----------------
+# MultiPriNTF model architecture configuration
+model:
+  name: 'MultiPriNTF'
+  version: '1.0'
+  
+  # Visual encoder configuration
+  visual_encoder:
+    architecture: 'hybrid'
+    backbone: 'resnet50'
+    pretrained: true
+    input_dim: 3
+    hidden_dims: [32, 64, 128, 256]
+    activation: 'relu'
+    dropout: 0.1
+    batch_norm: true
+    feature_dim: 512
+
+  # Transaction encoder configuration
+  transaction_encoder:
+    input_dim: 512
+    hidden_dims: [256, 128]
+    activation: 'relu'
+    dropout: 0.1
+    layer_norm: true
+    temporal_encoding: true
+
+  # Fusion module configuration
+  fusion:
+    architecture: 'cross_attention'
+    dim: 512
+    num_heads: 8
+    dropout: 0.1
+    activation: 'gelu'
+    layer_norm: true
+    attention_dropout: 0.1
+
+  # Decoder configuration
+  decoder:
+    architecture: 'transpose_conv'
+    hidden_dims: [256, 128, 64, 32]
+    activation: 'relu'
+    dropout: 0.1
+    batch_norm: true
+    skip_connections: true
+
+# Training Configuration
+# -------------------
+# Settings for model training and optimization
+training:
+  optimizer:
+    name: 'adam'
+    learning_rate: 1.0e-4
+    weight_decay: 1.0e-6
+    beta1: 0.9
+    beta2: 0.999
+    eps: 1.0e-8
+    amsgrad: true
+    clip_grad_norm: 1.0
+
+  scheduler:
+    name: 'cosine'
+    warmup_epochs: 5
+    min_lr: 1.0e-6
+    T_max: 100
+    eta_min: 0
+    warmup_method: 'linear'
+
+  loss:
+    reconstruction_weight: 1.0
+    kl_weight: 0.1
+    market_weight: 0.5
+    attribute_weight: 0.3
+    temperature: 0.07
+    margin: 0.5
+
+  epochs: 100
+  gradient_accumulation_steps: 1
+  max_grad_norm: 1.0
+  
+  early_stopping:
+    enabled: true
+    patience: 10
+    min_delta: 1.0e-4
+    monitor: 'val_loss'
+    mode: 'min'
+
+  checkpointing:
+    enabled: true
+    frequency: 5    # Save every N epochs
+    keep_last: 3    # Number of checkpoints to keep
+    save_optimizer: true
+    save_scheduler: true
+    monitor: 'val_loss'
+    mode: 'min'
+
+# Security Configuration
+# -------------------
+# Security and privacy settings
+security:
+  encryption:
+    enabled: true
+    key_length: 32
+    algorithm: 'AES-256'
+    iterations: 480000
+
+  privacy:
+    epsilon: 0.1    # Privacy budget
+    delta: 1.0e-5   # Privacy loss probability
+    noise_scale: 0.01
+    clip_norm: 1.0
+    secure_aggregation: true
+
+# Evaluation Configuration
+# ---------------------
+# Settings for model evaluation and metrics
+evaluation:
+  metrics:
+    technical:
+      - name: 'reconstruction_loss'
+        weight: 1.0
+      - name: 'kl_divergence'
+        weight: 0.1
+      - name: 'parameter_efficiency'
+        weight: 0.5
+    
+    economic:
+      - name: 'market_efficiency'
+        weight: 1.0
+      - name: 'price_prediction_accuracy'
+        weight: 0.8
+      - name: 'roi_prediction'
+        weight: 0.6
+    
+    visual:
+      - name: 'attribute_accuracy'
+        weight: 0.7
+      - name: 'type_classification'
+        weight: 0.7
+      - name: 'visual_quality'
+        weight: 0.6
+
+  visualization:
+    enabled: true
+    save_path: 'results/visualizations'
+    formats: ['png', 'pdf']
+    dpi: 300
+    backends: ['matplotlib', 'plotly']
+
+# Logging Configuration
+# ------------------
+# Settings for experiment tracking and monitoring
+logging:
+  level: 'INFO'
+  save_path: 'logs'
+  
+  tensorboard:
+    enabled: true
+    log_freq: 100
+    save_path: 'runs'
+    flush_secs: 120
+  
+  wandb:
+    enabled: true
+    project: 'MultiPriNTF'
+    entity: 'your_entity'
+    tags: ['nft', 'market_analysis']
+    log_freq: 100
+    watch_model: true
+
+# Output Configuration
+# -----------------
+# Settings for results and artifact management
+output:
+  save_path: 'results'
+  save_format: 'h5'
+  compression: true
+  
+  backup:
+    enabled: true
+    frequency: 'daily'
+    keep_days: 7
+    compress: true
+    secure: true
+
+# Resource Management
+# ----------------
+# System resource allocation and management
+resources:
+  gpu_memory_fraction: 0.95
+  cpu_threads: 16
+  prefetch_buffer_size: 1000
+  cache_size_gb: 32
+  temp_directory: '/tmp/MultiPriNTF'
+  
+  memory_management:
+    clear_cache: true
+    garbage_collection: true
+    cuda_empty_cache: true
+    threshold: 0.9
